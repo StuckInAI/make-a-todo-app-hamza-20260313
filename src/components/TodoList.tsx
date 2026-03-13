@@ -1,26 +1,34 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import TodoForm from './TodoForm';
-import TodoItem, { TodoData } from './TodoItem';
+import TodoItem from './TodoItem';
+
+export interface Todo {
+  id: number;
+  title: string;
+  description: string | null;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function TodoList() {
-  const [todos, setTodos] = useState<TodoData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTodos = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
     try {
+      setError(null);
       const res = await fetch('/api/todos');
       if (!res.ok) throw new Error('Failed to fetch todos');
-      const data = await res.json() as TodoData[];
+      const data = await res.json();
       setTodos(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -28,35 +36,33 @@ export default function TodoList() {
     fetchTodos();
   }, [fetchTodos]);
 
-  const handleAdd = async (title: string, description: string) => {
+  const handleCreate = async (title: string, description: string) => {
     const res = await fetch('/api/todos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, description }),
     });
     if (!res.ok) {
-      const data = await res.json() as { error?: string };
+      const data = await res.json();
       throw new Error(data.error || 'Failed to create todo');
     }
-    const newTodo = await res.json() as TodoData;
+    const newTodo = await res.json();
     setTodos((prev) => [newTodo, ...prev]);
   };
 
   const handleToggle = async (id: number, completed: boolean) => {
-    const res = await fetch(`/api/todos/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ completed }),
-    });
-    if (!res.ok) throw new Error('Failed to update todo');
-    const updated = await res.json() as TodoData;
-    setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
-  };
-
-  const handleDelete = async (id: number) => {
-    const res = await fetch(`/api/todos/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete todo');
-    setTodos((prev) => prev.filter((t) => t.id !== id));
+    try {
+      const res = await fetch(`/api/todos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed }),
+      });
+      if (!res.ok) throw new Error('Failed to update todo');
+      const updated = await res.json();
+      setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update');
+    }
   };
 
   const handleUpdate = async (id: number, title: string, description: string) => {
@@ -66,70 +72,71 @@ export default function TodoList() {
       body: JSON.stringify({ title, description }),
     });
     if (!res.ok) {
-      const data = await res.json() as { error?: string };
+      const data = await res.json();
       throw new Error(data.error || 'Failed to update todo');
     }
-    const updated = await res.json() as TodoData;
+    const updated = await res.json();
     setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
   };
 
+  const handleDelete = async (id: number) => {
+    try {
+      const res = await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete todo');
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete');
+    }
+  };
+
+  const total = todos.length;
   const completedCount = todos.filter((t) => t.completed).length;
-  const totalCount = todos.length;
+  const pendingCount = total - completedCount;
 
   return (
     <div>
-      <TodoForm onAdd={handleAdd} />
+      <TodoForm onCreate={handleCreate} />
 
-      <div className="bg-white rounded-2xl shadow-md p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-700">Your Todos</h2>
-          {!isLoading && !error && totalCount > 0 && (
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-              {completedCount}/{totalCount} done
-            </span>
-          )}
+      {error && (
+        <div className="error-banner">
+          <span>⚠️</span> {error}
         </div>
+      )}
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            <span className="ml-3 text-sm text-gray-500">Loading todos...</span>
-          </div>
-        )}
+      {!loading && total > 0 && (
+        <div className="stats-bar">
+          <div className="stat-pill">Total: <span>{total}</span></div>
+          <div className="stat-pill">Completed: <span>{completedCount}</span></div>
+          <div className="stat-pill">Pending: <span>{pendingCount}</span></div>
+        </div>
+      )}
 
-        {!isLoading && error && (
-          <div className="text-center py-8">
-            <p className="text-red-500 text-sm mb-3">{error}</p>
-            <button
-              onClick={fetchTodos}
-              className="text-sm text-indigo-600 hover:text-indigo-800 underline"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {!isLoading && !error && todos.length === 0 && (
-          <div className="text-center py-10">
-            <p className="text-4xl mb-3">🎉</p>
-            <p className="text-gray-400 text-sm">No todos yet. Add one above!</p>
-          </div>
-        )}
-
-        {!isLoading && !error && todos.length > 0 && (
-          <div>
-            {todos.map((todo) => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                onToggle={handleToggle}
-                onDelete={handleDelete}
-                onUpdate={handleUpdate}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {loading ? (
+        <div className="loading-spinner">
+          <div className="spinner" />
+          Loading todos...
+        </div>
+      ) : todos.length === 0 ? (
+        <div className="todo-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <p>No todos yet!</p>
+          <small>Add your first todo above to get started.</small>
+        </div>
+      ) : (
+        <div className="todo-list">
+          {todos.map((todo) => (
+            <TodoItem
+              key={todo.id}
+              todo={todo}
+              onToggle={handleToggle}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
