@@ -10,9 +10,6 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  experimental: {
-    serverComponentsExternalPackages: ['typeorm', 'better-sqlite3', 'reflect-metadata'],
-  },
 };
 
 export default nextConfig;

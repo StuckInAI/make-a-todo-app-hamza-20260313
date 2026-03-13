@@ -12,10 +12,10 @@ export class Todo {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'varchar', nullable: false })
   title!: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'varchar', nullable: true, default: null })
   description!: string | null;
 
   @Column({ type: 'boolean', default: false })

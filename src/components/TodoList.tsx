@@ -1,107 +1,135 @@
-'use client';
+"use client";
 
-import { TodoItem as TodoItemType } from '@/app/page';
-import TodoItem from './TodoItem';
+import { useState, useEffect, useCallback } from 'react';
+import TodoForm from './TodoForm';
+import TodoItem, { TodoData } from './TodoItem';
 
-interface TodoListProps {
-  todos: TodoItemType[];
-  loading: boolean;
-  onToggle: (id: number, completed: boolean) => Promise<void>;
-  onUpdate: (
-    id: number,
-    title: string,
-    description: string,
-    completed: boolean
-  ) => Promise<void>;
-  onDelete: (id: number) => Promise<void>;
-}
+export default function TodoList() {
+  const [todos, setTodos] = useState<TodoData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export default function TodoList({
-  todos,
-  loading,
-  onToggle,
-  onUpdate,
-  onDelete,
-}: TodoListProps) {
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <svg
-          className="animate-spin h-10 w-10 mb-4 text-indigo-400"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8v8H4z"
-          />
-        </svg>
-        <p className="text-lg font-medium">Loading todos...</p>
-      </div>
-    );
-  }
+  const fetchTodos = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/todos');
+      if (!res.ok) throw new Error('Failed to fetch todos');
+      const data = await res.json() as TodoData[];
+      setTodos(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  if (todos.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <span className="text-6xl mb-4">📋</span>
-        <p className="text-xl font-semibold text-gray-500">No todos yet!</p>
-        <p className="text-sm mt-1">Add your first todo above to get started.</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchTodos();
+  }, [fetchTodos]);
 
-  const pending = todos.filter((t) => !t.completed);
-  const completed = todos.filter((t) => t.completed);
+  const handleAdd = async (title: string, description: string) => {
+    const res = await fetch('/api/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description }),
+    });
+    if (!res.ok) {
+      const data = await res.json() as { error?: string };
+      throw new Error(data.error || 'Failed to create todo');
+    }
+    const newTodo = await res.json() as TodoData;
+    setTodos((prev) => [newTodo, ...prev]);
+  };
+
+  const handleToggle = async (id: number, completed: boolean) => {
+    const res = await fetch(`/api/todos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed }),
+    });
+    if (!res.ok) throw new Error('Failed to update todo');
+    const updated = await res.json() as TodoData;
+    setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  };
+
+  const handleDelete = async (id: number) => {
+    const res = await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete todo');
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleUpdate = async (id: number, title: string, description: string) => {
+    const res = await fetch(`/api/todos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description }),
+    });
+    if (!res.ok) {
+      const data = await res.json() as { error?: string };
+      throw new Error(data.error || 'Failed to update todo');
+    }
+    const updated = await res.json() as TodoData;
+    setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  };
+
+  const completedCount = todos.filter((t) => t.completed).length;
+  const totalCount = todos.length;
 
   return (
-    <div className="flex flex-col gap-6">
-      {pending.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">
-            Pending ({pending.length})
-          </h3>
-          <div className="flex flex-col gap-3">
-            {pending.map((todo) => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                onToggle={onToggle}
-                onUpdate={onUpdate}
-                onDelete={onDelete}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+    <div>
+      <TodoForm onAdd={handleAdd} />
 
-      {completed.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">
-            Completed ({completed.length})
-          </h3>
-          <div className="flex flex-col gap-3">
-            {completed.map((todo) => (
+      <div className="bg-white rounded-2xl shadow-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-700">Your Todos</h2>
+          {!isLoading && !error && totalCount > 0 && (
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+              {completedCount}/{totalCount} done
+            </span>
+          )}
+        </div>
+
+        {isLoading && (
+          <div className="flex items-center justify-center py-10">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <span className="ml-3 text-sm text-gray-500">Loading todos...</span>
+          </div>
+        )}
+
+        {!isLoading && error && (
+          <div className="text-center py-8">
+            <p className="text-red-500 text-sm mb-3">{error}</p>
+            <button
+              onClick={fetchTodos}
+              className="text-sm text-indigo-600 hover:text-indigo-800 underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !error && todos.length === 0 && (
+          <div className="text-center py-10">
+            <p className="text-4xl mb-3">🎉</p>
+            <p className="text-gray-400 text-sm">No todos yet. Add one above!</p>
+          </div>
+        )}
+
+        {!isLoading && !error && todos.length > 0 && (
+          <div>
+            {todos.map((todo) => (
               <TodoItem
                 key={todo.id}
                 todo={todo}
-                onToggle={onToggle}
-                onUpdate={onUpdate}
-                onDelete={onDelete}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+                onUpdate={handleUpdate}
               />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

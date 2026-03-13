@@ -1,11 +1,11 @@
 node_modules
 .next
 .git
-*.db
-*.db-shm
-*.db-wal
-data/
+.gitignore
+*.md
 .env.local
 .env.development
-.env.production
+.env.test
+data/
+.DS_Store
 npm-debug.log*

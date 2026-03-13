@@ -21,12 +21,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json() as { title?: string; description?: string };
     const { title, description } = body;
 
-    if (!title || typeof title !== 'string' || title.trim() === '') {
+    if (!title || title.trim() === '') {
       return NextResponse.json(
-        { error: 'Title is required and must be a non-empty string' },
+        { error: 'Title is required' },
         { status: 400 }
       );
     }
@@ -36,15 +36,12 @@ export async function POST(request: NextRequest) {
 
     const todo = todoRepository.create({
       title: title.trim(),
-      description:
-        description && typeof description === 'string'
-          ? description.trim() || null
-          : null,
+      description: description?.trim() || null,
       completed: false,
     });
 
-    const saved = await todoRepository.save(todo);
-    return NextResponse.json(saved, { status: 201 });
+    const savedTodo = await todoRepository.save(todo);
+    return NextResponse.json(savedTodo, { status: 201 });
   } catch (error) {
     console.error('POST /api/todos error:', error);
     return NextResponse.json(
